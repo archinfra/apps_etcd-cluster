@@ -1,0 +1,5 @@
+dist/
+.build/
+payload.tar.gz
+*.run
+*.sha256
