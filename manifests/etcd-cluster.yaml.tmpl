@@ -108,37 +108,22 @@ spec:
         image: __ETCD_IMAGE__
         imagePullPolicy: IfNotPresent
         command:
-        - /bin/sh
-        - -ec
-        - |
-          HOSTNAME="$(hostname)"
-          ETCD_NAME="${HOSTNAME}"
-          INITIAL_CLUSTER=""
-          i=0
-          while [ "${i}" -lt "__REPLICAS__" ]; do
-            member="etcd-${i}=http://etcd-${i}.etcd-headless.__NAMESPACE__.svc.cluster.local:2380"
-            if [ -z "${INITIAL_CLUSTER}" ]; then
-              INITIAL_CLUSTER="${member}"
-            else
-              INITIAL_CLUSTER="${INITIAL_CLUSTER},${member}"
-            fi
-            i=$((i + 1))
-          done
-          exec /usr/local/bin/etcd \
-            --name="${ETCD_NAME}" \
-            --data-dir=/etcd-data \
-            --listen-client-urls=http://0.0.0.0:2379 \
-            --advertise-client-urls=http://${ETCD_NAME}.etcd-headless.__NAMESPACE__.svc.cluster.local:2379 \
-            --listen-peer-urls=http://0.0.0.0:2380 \
-            --initial-advertise-peer-urls=http://${ETCD_NAME}.etcd-headless.__NAMESPACE__.svc.cluster.local:2380 \
-            --initial-cluster="${INITIAL_CLUSTER}" \
-            --initial-cluster-state=new \
-            --initial-cluster-token=__CLUSTER_TOKEN__ \
-            --logger=zap \
-            --log-level=info \
-            --log-outputs=stderr \
-            --auto-compaction-mode=periodic \
-            --auto-compaction-retention=1h
+        - /usr/local/bin/etcd
+        args:
+        - --name=$(POD_NAME)
+        - --data-dir=/etcd-data
+        - --listen-client-urls=http://0.0.0.0:2379
+        - --advertise-client-urls=http://$(POD_NAME).etcd-headless.__NAMESPACE__.svc.cluster.local:2379
+        - --listen-peer-urls=http://0.0.0.0:2380
+        - --initial-advertise-peer-urls=http://$(POD_NAME).etcd-headless.__NAMESPACE__.svc.cluster.local:2380
+        - --initial-cluster=__INITIAL_CLUSTER__
+        - --initial-cluster-state=new
+        - --initial-cluster-token=__CLUSTER_TOKEN__
+        - --logger=zap
+        - --log-level=info
+        - --log-outputs=stderr
+        - --auto-compaction-mode=periodic
+        - --auto-compaction-retention=1h
         ports:
         - name: client
           containerPort: 2379
@@ -149,12 +134,17 @@ spec:
         env:
         - name: ETCDCTL_API
           value: "3"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         readinessProbe:
           exec:
             command:
-            - /bin/sh
-            - -ec
-            - /usr/local/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint health
+            - /usr/local/bin/etcdctl
+            - --endpoints=http://127.0.0.1:2379
+            - endpoint
+            - health
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
@@ -162,9 +152,10 @@ spec:
         livenessProbe:
           exec:
             command:
-            - /bin/sh
-            - -ec
-            - /usr/local/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint health
+            - /usr/local/bin/etcdctl
+            - --endpoints=http://127.0.0.1:2379
+            - endpoint
+            - health
           initialDelaySeconds: 30
           periodSeconds: 20
           timeoutSeconds: 5
