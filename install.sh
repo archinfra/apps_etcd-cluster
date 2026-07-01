@@ -205,12 +205,29 @@ escape_sed() {
   printf '%s' "$1" | sed -e 's/[\/&]/\\&/g'
 }
 
+initial_cluster_string() {
+  local i=0
+  local cluster=""
+  local member=""
+  while [[ "${i}" -lt "${REPLICAS}" ]]; do
+    member="etcd-${i}=http://etcd-${i}.etcd-headless.${NAMESPACE}.svc.cluster.local:2380"
+    if [[ -z "${cluster}" ]]; then
+      cluster="${member}"
+    else
+      cluster="${cluster},${member}"
+    fi
+    i=$((i + 1))
+  done
+  printf '%s\n' "${cluster}"
+}
+
 render_manifest() {
-  local etcd_image rendered storage_class_line nodeport_line
+  local etcd_image rendered storage_class_line nodeport_line initial_cluster
   etcd_image="$(target_ref_by_name etcd)"
   rendered="${WORKDIR}/rendered-etcd-cluster.yaml"
   storage_class_line=""
   nodeport_line=""
+  initial_cluster="$(initial_cluster_string)"
 
   if [[ -n "${STORAGE_CLASS}" ]]; then
     storage_class_line="    storageClassName: ${STORAGE_CLASS}"
@@ -223,6 +240,7 @@ render_manifest() {
     -e "s/__NAMESPACE__/$(escape_sed "${NAMESPACE}")/g" \
     -e "s/__ETCD_IMAGE__/$(escape_sed "${etcd_image}")/g" \
     -e "s/__REPLICAS__/$(escape_sed "${REPLICAS}")/g" \
+    -e "s/__INITIAL_CLUSTER__/$(escape_sed "${initial_cluster}")/g" \
     -e "s/__STORAGE_SIZE__/$(escape_sed "${STORAGE_SIZE}")/g" \
     -e "s/__SERVICE_TYPE__/$(escape_sed "${SERVICE_TYPE}")/g" \
     -e "s/__CLUSTER_TOKEN__/$(escape_sed "${CLUSTER_TOKEN}")/g" \
